@@ -11,12 +11,16 @@ const _kPrefix = 'invoice_prefix_v1';
 const _kNext = 'invoice_next_number_v1';
 const _kDraft = 'bill_draft_v1';
 const _kLastBackup = 'last_backup_v1';
+const _kGoldRate = 'gold_rate_v2';
+const _kSilverRate = 'silver_rate_v2';
+const _kRateSource = 'rate_source_v2';
+const _kRateUpdated = 'rate_updated_v2';
 
 /// Which page of the app is showing (0 Home, 1 New Invoice, 2 History, 3 Day Book, 4 Settings).
 final ValueNotifier<int> navIndex = ValueNotifier<int>(0);
 
 /// Backup file format version. Bump only when the file layout changes.
-const int kBackupVersion = 1;
+const int kBackupVersion = 2;
 
 enum PeriodKind { daily, weekly, monthly }
 
@@ -61,6 +65,10 @@ class BillStore extends ChangeNotifier {
   List<SavedBill> bills = [];
   String prefix = 'SJJ';
   int nextNumber = 1;
+  double goldRate = 70000; // INR per 10 grams
+  double silverRate = 100; // INR per gram
+  String rateSource = 'Default';
+  DateTime? rateUpdatedAt;
 
   /// When the last backup was exported or copied (null = never).
   DateTime? lastBackupAt;
@@ -74,6 +82,10 @@ class BillStore extends ChangeNotifier {
       _prefs = p;
       prefix = p.getString(_kPrefix) ?? 'SJJ';
       nextNumber = p.getInt(_kNext) ?? 1;
+      goldRate = p.getDouble(_kGoldRate) ?? 70000;
+      silverRate = p.getDouble(_kSilverRate) ?? 100;
+      rateSource = p.getString(_kRateSource) ?? 'Default';
+      rateUpdatedAt = DateTime.tryParse(p.getString(_kRateUpdated) ?? '');
       lastBackupAt = DateTime.tryParse(p.getString(_kLastBackup) ?? '');
       final raw = p.getString(_kBills);
       if (raw != null) {
@@ -178,6 +190,19 @@ class BillStore extends ChangeNotifier {
         .length;
   }
 
+  Future<void> setRates({required double gold, required double silver, required String source}) async {
+    if (gold <= 0 || silver <= 0) return;
+    goldRate = gold;
+    silverRate = silver;
+    rateSource = source;
+    rateUpdatedAt = DateTime.now();
+    notifyListeners();
+    await _prefs?.setDouble(_kGoldRate, goldRate);
+    await _prefs?.setDouble(_kSilverRate, silverRate);
+    await _prefs?.setString(_kRateSource, rateSource);
+    await _prefs?.setString(_kRateUpdated, rateUpdatedAt!.toIso8601String());
+  }
+
   Future<void> _persistBills() async {
     final p = _prefs;
     if (p == null) return;
@@ -273,6 +298,7 @@ class BillStore extends ChangeNotifier {
       'exportedAt': DateTime.now().toIso8601String(),
       'invoicePrefix': prefix,
       'nextNumber': nextNumber,
+      'rates': {'goldPer10g': goldRate, 'silverPerGram': silverRate, 'source': rateSource, 'updatedAt': rateUpdatedAt?.toIso8601String()},
       'bills': bills.map((b) => b.toJson()).toList(),
       if (draft != null) 'draft': draft,
     };
@@ -346,6 +372,18 @@ class BillStore extends ChangeNotifier {
     nextNumber = next;
     final backupPrefix = (map['invoicePrefix'] ?? '').toString().trim();
     if (replace && backupPrefix.isNotEmpty) prefix = backupPrefix;
+    final rates = map['rates'];
+    if (replace && rates is Map) {
+      final g = rates['goldPer10g']; final si = rates['silverPerGram'];
+      if (g is num && g > 0) goldRate = g.toDouble();
+      if (si is num && si > 0) silverRate = si.toDouble();
+      rateSource = (rates['source'] ?? 'Restored').toString();
+      rateUpdatedAt = DateTime.tryParse((rates['updatedAt'] ?? '').toString());
+      await _prefs?.setDouble(_kGoldRate, goldRate);
+      await _prefs?.setDouble(_kSilverRate, silverRate);
+      await _prefs?.setString(_kRateSource, rateSource);
+      if (rateUpdatedAt != null) await _prefs?.setString(_kRateUpdated, rateUpdatedAt!.toIso8601String());
+    }
 
     var draftRestored = false;
     final draft = map['draft'];

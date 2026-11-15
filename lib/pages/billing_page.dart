@@ -85,6 +85,8 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     store.addListener(_onStore);
+    goldRateController.text = store.goldRate.toStringAsFixed(2);
+    silverRateController.text = store.silverRate.toStringAsFixed(2);
     _restoreDraft();
   }
 

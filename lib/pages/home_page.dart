@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../constants.dart';
@@ -6,6 +9,66 @@ import '../widgets.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
+
+  Future<void> _editRates(BuildContext context) async {
+    final gold = TextEditingController(text: store.goldRate.toStringAsFixed(2));
+    final silver = TextEditingController(text: store.silverRate.toStringAsFixed(2));
+    final formKey = GlobalKey<FormState>();
+    final save = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Set Gold & Silver Rates'),
+      content: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextFormField(controller: gold, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Gold per 10 grams (Rs.)'), validator: (v) => (double.tryParse(v ?? '') ?? 0) > 0 ? null : 'Enter a valid rate'),
+        const SizedBox(height: 12),
+        TextFormField(controller: silver, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Silver per gram (Rs.)'), validator: (v) => (double.tryParse(v ?? '') ?? 0) > 0 ? null : 'Enter a valid rate'),
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () { if (formKey.currentState!.validate()) Navigator.pop(ctx, true); }, child: const Text('Save rates'))],
+    ));
+    if (save == true) await store.setRates(gold: double.parse(gold.text), silver: double.parse(silver.text), source: 'Manual');
+    gold.dispose(); silver.dispose();
+  }
+
+  Future<void> _fetchRates(BuildContext context) async {
+    showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const AlertDialog(content: Row(children: [CircularProgressIndicator(), SizedBox(width: 16), Expanded(child: Text('Fetching live market rates…'))])));
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+      Future<Map<String, dynamic>> getJson(String url) async {
+        final request = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 12));
+        request.headers.set(HttpHeaders.userAgentHeader, 'ShreeJankiJewellers/1.6');
+        final response = await request.close().timeout(const Duration(seconds: 12));
+        if (response.statusCode != 200) throw Exception('Rate service returned HTTP ${response.statusCode}');
+        return jsonDecode(await response.transform(utf8.decoder).join()) as Map<String, dynamic>;
+      }
+      final results = await Future.wait([getJson('https://api.gold-api.com/price/XAU'), getJson('https://api.gold-api.com/price/XAG'), getJson('https://open.er-api.com/v6/latest/USD')]);
+      client.close();
+      final goldUsd = (results[0]['price'] as num).toDouble();
+      final silverUsd = (results[1]['price'] as num).toDouble();
+      final inr = ((results[2]['rates'] as Map)['INR'] as num).toDouble();
+      final goldInr = goldUsd * inr * 10 / 31.1034768;
+      final silverInr = silverUsd * inr / 31.1034768;
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      await store.setRates(gold: goldInr, silver: silverInr, source: 'Online (USD/INR converted)');
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Online market rates updated. Verify local jeweller premiums before billing.')));
+    } catch (e) {
+      if (context.mounted) { Navigator.of(context, rootNavigator: true).pop(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not fetch rates. Your saved rates are unchanged. Details: $e'))); }
+    }
+  }
+
+  Widget _rateCards(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Expanded(child: _rateCard(context, icon: Icons.edit, title: 'Set Rates Manually', subtitle: 'Enter shop rates', button: 'SET RATES', onTap: () => _editRates(context))),
+      const SizedBox(width: 10),
+      Expanded(child: _rateCard(context, icon: Icons.public, title: 'Fetch Rates Online', subtitle: 'Market reference rates', button: 'FETCH NOW', onTap: () => _fetchRates(context))),
+    ]);
+  }
+
+  Widget _rateCard(BuildContext context, {required IconData icon, required String title, required String subtitle, required String button, required VoidCallback onTap}) => Card(
+    color: const Color(0xFFFFF5DF), elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17), side: const BorderSide(color: gold, width: 1.3)),
+    child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, color: maroon, size: 30), const SizedBox(height: 7), Text(title, style: const TextStyle(color: maroon, fontWeight: FontWeight.bold, fontSize: 14)), Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.brown)), const SizedBox(height: 8),
+      SizedBox(width: double.infinity, child: FilledButton(onPressed: onTap, style: FilledButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 4)), child: Text(button, style: const TextStyle(fontSize: 11)))),
+    ])),
+  );
 
   Widget _banner() {
     return Container(
@@ -74,7 +137,16 @@ class HomePage extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 950),
             child: ListView(padding: const EdgeInsets.all(16), children: [
               _banner(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
+              _rateCards(context),
+              const SizedBox(height: 6),
+              Card(color: maroonDark, child: Padding(padding: const EdgeInsets.all(12), child: ListenableBuilder(listenable: store, builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('CURRENT METAL RATES', style: TextStyle(color: goldLight, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                const SizedBox(height: 6),
+                Row(children: [Expanded(child: Text('Gold  ₹${store.goldRate.toStringAsFixed(0)} / 10g', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))), Expanded(child: Text('Silver  ₹${store.silverRate.toStringAsFixed(2)} / g', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)))]),
+                Text('Source: ${store.rateSource}  •  ${store.rateUpdatedAt == null ? 'Not updated yet' : fmtDateTime(store.rateUpdatedAt!)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+              ])))),
+              const SizedBox(height: 10),
               Row(children: [
                 Expanded(child: StatCard(icon: Icons.receipt_long, label: 'Total Bills', value: '${store.totalBills}')),
                 const SizedBox(width: 10),
