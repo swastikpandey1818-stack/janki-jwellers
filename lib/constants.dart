@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const appVersion = '1.6.0';
+const appVersion = '1.7.0';
 
 const shopName = 'Shree Janki Jewellers';
 const shopAddress = 'Hasanpura, Thakur Badi Mandir, Siwan, Bihar';
@@ -34,3 +34,25 @@ String fmtTime(DateTime d) {
 }
 
 String fmtDateTime(DateTime d) => '${fmtDate(d)}  ${fmtTime(d)}';
+
+/// Rate for display / typing: whole numbers without decimals, otherwise at most 2 decimals.
+String fmtRate(double v) {
+  if (v == v.roundToDouble()) return v.toStringAsFixed(0);
+  var s = v.toStringAsFixed(2);
+  if (s.endsWith('0')) s = s.substring(0, s.length - 1);
+  return s;
+}
+
+const _monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/// "12 Mar" - used for birthdays and anniversaries where the year does not matter.
+String fmtDayMonth(DateTime d) => '${d.day} ${_monthShort[d.month - 1]}';
+
+/// "today", "tomorrow", "in 3 days", "2 days ago".
+String relativeDays(int days) {
+  if (days == 0) return 'today';
+  if (days == 1) return 'tomorrow';
+  if (days == -1) return 'yesterday';
+  if (days > 1) return 'in $days days';
+  return '${-days} days ago';
+}

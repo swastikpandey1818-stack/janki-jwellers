@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import '../constants.dart';
+import '../messages.dart';
 import '../models.dart';
 import '../pdf_service.dart';
 import '../store.dart';
+import '../whatsapp.dart';
 import '../widgets.dart';
 
 class BillDetailPage extends StatefulWidget {
@@ -291,6 +293,7 @@ class _BillDetailPageState extends State<BillDetailPage> {
                   if (d.hasPaymentEntry) ...[
                     const Divider(),
                     _row('Paid at billing', bill.paidAtBilling),
+                    if (d.advanceUsed > 0.005) _row('  (includes booking advance)', d.advanceUsed),
                     ...bill.payments.map(_paymentRow),
                     _row(bill.hasDue ? 'BALANCE DUE' : 'PAID IN FULL', bill.dueAmount,
                         bold: true, color: bill.hasDue ? _red : _green),
@@ -333,7 +336,48 @@ class _BillDetailPageState extends State<BillDetailPage> {
                 ),
               ],
             ],
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF1FA855), foregroundColor: Colors.white),
+                    onPressed: () async {
+                      final sent = await sendWhatsAppDialog(
+                        context,
+                        phone: d.customerPhone,
+                        text: bill.hasDue ? dueReminderText(bill) : billThanksText(bill),
+                        title: bill.hasDue ? 'Due reminder' : 'Message to customer',
+                      );
+                      if (sent && bill.hasDue) {
+                        await store.logBillReminder(bill.invoiceNo);
+                        if (mounted) setState(() {});
+                      }
+                    },
+                    icon: const Icon(Icons.chat),
+                    label: Text(bill.hasDue ? 'WHATSAPP DUE REMINDER' : 'WHATSAPP MESSAGE', textAlign: TextAlign.center),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: () => callWithMessage(context, d.customerPhone),
+                  icon: const Icon(Icons.call),
+                  label: const Text('CALL'),
+                ),
+              ),
+            ]),
+            if (bill.remindedAt.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                    'Reminded ${bill.remindedAt.length} time${bill.remindedAt.length == 1 ? '' : 's'}, last on ${fmtDate(bill.remindedAt.last)}.',
+                    style: TextStyle(color: Colors.brown.shade400, fontSize: 12.5)),
+              ),
+            const SizedBox(height: 14),
             SizedBox(
               height: 52,
               child: FilledButton.icon(

@@ -166,6 +166,7 @@ class PdfService {
                 if (d.hasPaymentEntry) ...[
                   pw.SizedBox(height: 6),
                   _summaryRow('Paid at billing', bill.paidAtBilling),
+                  if (d.advanceUsed > 0.005) _summaryRow('  (includes booking advance)', d.advanceUsed),
                   ...bill.payments.map((pm) => _summaryRow('Received ${fmtDate(pm.date)}', pm.amount)),
                   pw.Container(
                     padding: const pw.EdgeInsets.all(9),

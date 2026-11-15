@@ -1,11 +1,10 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../backup_helper.dart';
 import '../constants.dart';
 import '../store.dart';
 import '../widgets.dart';
@@ -20,9 +19,11 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final prefixController = TextEditingController(text: store.prefix);
   final nextController = TextEditingController(text: store.nextNumber.toString());
+  final templateController = TextEditingController(text: store.dueTemplate);
 
   @override
   void dispose() {
+    templateController.dispose();
     prefixController.dispose();
     nextController.dispose();
     super.dispose();
@@ -58,17 +59,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (backupBusy) return;
     setState(() => backupBusy = true);
     try {
-      final bytes = Uint8List.fromList(utf8.encode(store.exportJson()));
-      await FileSaver.instance.saveFile(
-        name: store.exportFileName(),
-        bytes: bytes,
-        fileExtension: 'json',
-        mimeType: MimeType.json,
-      );
-      await store.markBackedUp();
-      _message('Backup saved with ${store.totalBills} bills. Keep this file safe (Drive / WhatsApp to yourself).');
-    } catch (e) {
-      _message('Could not save backup: $e');
+      final err = await saveBackupFile();
+      _message(err == null
+          ? 'Backup saved: ${store.totalBills} bills, ${store.customers.length} customers, ${store.bookings.length} bookings. Keep this file safe (Drive / WhatsApp to yourself).'
+          : 'Could not save backup: $err');
     } finally {
       if (mounted) setState(() => backupBusy = false);
     }
@@ -135,6 +129,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     prefixController.text = store.prefix;
     nextController.text = store.nextNumber.toString();
+    templateController.text = store.dueTemplate;
     if (result.error != null) {
       _message(result.error!);
       return;
@@ -143,8 +138,11 @@ class _SettingsPageState extends State<SettingsPage> {
       if (result.skipped > 0) '${result.skipped} already here',
       if (result.unreadable > 0) '${result.unreadable} unreadable',
     ].join(', ');
-    _message('Restored ${result.added} bill${result.added == 1 ? '' : 's'}${extra.isEmpty ? '' : ' ($extra)'}.'
-        '${result.draftRestored ? ' Restart the app to load your saved rates.' : ''}');
+    _message('Restored ${result.added} bill${result.added == 1 ? '' : 's'}, '
+        '${result.bookingsAdded} booking${result.bookingsAdded == 1 ? '' : 's'}, '
+        '${result.customersAdded} customer${result.customersAdded == 1 ? '' : 's'}'
+        '${extra.isEmpty ? '' : ' ($extra)'}.'
+        '${result.draftRestored ? ' Restart the app to load your unfinished bill.' : ''}');
   }
 
   Future<void> _deleteAll() async {
@@ -220,7 +218,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 leading: Image.asset(goldBarAsset, width: 40, height: 40,
                     errorBuilder: (_, __, ___) => const Icon(Icons.receipt_long, color: maroon)),
                 title: Text('${store.totalBills} bills saved on this phone'),
-                subtitle: Text('Total sales ${money(store.totalSales)}'),
+                subtitle: Text('${store.customers.length} customers  •  ${store.bookings.length} bookings  •  Total sales ${money(store.totalSales)}'),
               ),
             ),
             const SizedBox(height: 8),
@@ -239,9 +237,10 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 8),
             Card(
               child: ListTile(
-                leading: const Icon(Icons.cloud_done_outlined, color: maroon),
+                leading: Icon(store.backupDue ? Icons.warning_amber_rounded : Icons.cloud_done_outlined,
+                    color: store.backupDue ? const Color(0xFFC62828) : maroon),
                 title: Text(store.lastBackupAt == null ? 'No backup made yet' : 'Last backup ${fmtDateTime(store.lastBackupAt!)}'),
-                subtitle: Text('${store.totalBills} bills, ${money(store.totalDue)} due'),
+                subtitle: Text('${store.changesSinceBackup} change${store.changesSinceBackup == 1 ? '' : 's'} not backed up  •  ${money(store.totalDue)} due'),
               ),
             ),
             const SizedBox(height: 8),
@@ -281,6 +280,59 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: const Text('RESTORE FROM PASTED TEXT'),
               ),
             ),
+            const SizedBox(height: 26),
+            sectionTitle('Reminders', subtitle: 'Backup reminder and the WhatsApp message for dues.'),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<int>(
+              key: ValueKey(store.backupEveryDays),
+              initialValue: store.backupEveryDays,
+              decoration: const InputDecoration(labelText: 'Remind me to back up'),
+              items: ({0, 1, 3, 7, 15, 30, store.backupEveryDays}.toList()..sort())
+                  .map((d) => DropdownMenuItem(
+                      value: d, child: Text(d == 0 ? 'Never' : (d == 1 ? 'Every day' : 'Every $d days'))))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) store.setBackupEveryDays(v);
+              },
+            ),
+            const SizedBox(height: 4),
+            Text('You are reminded only when something changed since the last backup.',
+                style: TextStyle(color: Colors.brown.shade400, fontSize: 12)),
+            const SizedBox(height: 14),
+            TextField(
+              controller: templateController,
+              minLines: 5,
+              maxLines: 10,
+              decoration: const InputDecoration(
+                labelText: 'Due reminder message (WhatsApp)',
+                helperText: 'Use {name} {amount} {invoice} {date} {total} {shop} {phone} {upi}',
+                helperMaxLines: 2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white),
+                  onPressed: () async {
+                    await store.setDueTemplate(templateController.text);
+                    _message('Message saved.');
+                  },
+                  child: const Text('SAVE MESSAGE'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    await store.setDueTemplate(defaultDueTemplate);
+                    templateController.text = store.dueTemplate;
+                    _message('Message reset.');
+                  },
+                  child: const Text('RESET'),
+                ),
+              ),
+            ]),
             const SizedBox(height: 26),
             sectionTitle('Shop Details'),
             const SizedBox(height: 8),

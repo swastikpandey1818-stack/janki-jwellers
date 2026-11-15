@@ -4,6 +4,7 @@ import '../constants.dart';
 import '../models.dart';
 import '../store.dart';
 import '../widgets.dart';
+import 'bookings_page.dart';
 
 /// Daily / weekly / monthly totals: billed, received, dues cleared and dues still open.
 class DayBookPage extends StatefulWidget {
@@ -83,6 +84,15 @@ class _DayBookPageState extends State<DayBookPage> {
         trailing: Text(money(c.payment.amount), style: const TextStyle(fontWeight: FontWeight.w800, color: _green)),
       );
 
+  Widget _advanceTile(BuildContext context, AdvanceEntry a) => ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        onTap: () => openBooking(context, a.booking),
+        title: Text(a.booking.customerName, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text('${fmtDateTime(a.payment.date)}${a.payment.note.trim().isEmpty ? '' : '  •  ${a.payment.note.trim()}'}'),
+        trailing: Text(money(a.payment.amount), style: const TextStyle(fontWeight: FontWeight.w800, color: _green)),
+      );
+
   Widget _dueBillTile(BuildContext context, SavedBill b) => ListTile(
         dense: true,
         contentPadding: EdgeInsets.zero,
@@ -108,12 +118,23 @@ class _DayBookPageState extends State<DayBookPage> {
           _row('Total billed', t.billed),
           _row('Received at billing', t.paidAtBilling),
           _row('Due cleared (received later)', t.collectedLater),
+          if (t.advances > 0) _row('Advance received (bookings)', t.advances),
+          if (t.refunds > 0) _row('Advance returned to customers', -t.refunds, color: _red),
           const Divider(height: 16),
           _row('TOTAL RECEIVED', t.cashIn, bold: true, color: _green),
           if (t.dueCreated > 0) _row('New due from this $_periodWord\'s bills', t.dueCreated, color: _red),
           if (t.clearances.isNotEmpty)
             _expander(context, 'Dues cleared this $_periodWord  (${t.clearances.length})', _green,
                 t.clearances.map((c) => _clearanceTile(context, c)).toList()),
+          if (t.advanceAdjusted > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Bills this $_periodWord also used ${money(t.advanceAdjusted)} of advance received earlier (not counted again).',
+                  style: TextStyle(color: Colors.brown.shade400, fontSize: 11.5)),
+            ),
+          if (t.advanceEntries.isNotEmpty)
+            _expander(context, 'Advances received this $_periodWord  (${t.advanceEntries.length})', _green,
+                t.advanceEntries.map((a) => _advanceTile(context, a)).toList()),
           if (t.dueBills.isNotEmpty)
             _expander(context, 'Bills with due from this $_periodWord  (${t.dueBills.length})', _red,
                 t.dueBills.map((b) => _dueBillTile(context, b)).toList()),

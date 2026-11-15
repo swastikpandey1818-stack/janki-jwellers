@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../constants.dart';
+import '../crm_models.dart';
 import '../models.dart';
 import '../store.dart';
 import '../widgets.dart';
 import 'bill_detail_page.dart';
+import 'customers_page.dart';
 
 /// Text controllers for one item while the bill is being typed.
 class ItemForm {
@@ -80,14 +82,24 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
   bool busy = false;
   Timer? _saveTimer;
 
+  /// Booking this bill is being made from ('' = none). Its advance counts as already paid.
+  String linkedBookingId = '';
+  int _seenRatesVersion = 0;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     store.addListener(_onStore);
-    goldRateController.text = store.goldRate.toStringAsFixed(2);
-    silverRateController.text = store.silverRate.toStringAsFixed(2);
     _restoreDraft();
+    _syncRatesFromStore();
+  }
+
+  /// The rates live in the store (set on the Dashboard); the fields here show them.
+  void _syncRatesFromStore() {
+    goldRateController.text = fmtRate(store.goldRate);
+    silverRateController.text = fmtRate(store.silverRate);
+    _seenRatesVersion = store.ratesVersion;
   }
 
   // ---------- draft cache (typed bill + prices survive closing the app) ----------
@@ -104,7 +116,11 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     _saveTimer = Timer(const Duration(milliseconds: 400), _saveDraftNow);
   }
 
-  void _saveDraftNow() => store.saveDraft(_toData().toJson());
+  void _saveDraftNow() {
+    final data = _toData();
+    store.saveDraft(data.toJson());
+    store.rememberBillingRates(data.goldRatePer10g, data.silverRatePerGram);
+  }
 
   void _restoreDraft() {
     final json = store.loadDraft();
@@ -140,6 +156,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
         applyGst: applyGst,
         amountPaid: amountPaidController.text,
         qrMode: qrMode,
+        bookingId: linkedBookingId,
         items: items.map((i) => i.toData()).toList(),
       );
 
@@ -158,6 +175,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     // A saved draft keeps its amount paid; a copied old bill starts with nothing paid entered.
     amountPaidController.text = includeRates ? d.amountPaid : '';
     qrMode = includeRates ? d.qrMode : null;
+    linkedBookingId = includeRates ? d.bookingId : '';
     if (includeRates) {
       goldRateController.text = d.goldRate;
       silverRateController.text = d.silverRate;
@@ -176,10 +194,33 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
   }
 
   void _onStore() {
+    if (!mounted) return;
+    if (_seenRatesVersion != store.ratesVersion) {
+      setState(_syncRatesFromStore);
+    }
+    final booking = store.pendingBooking;
+    if (booking != null) {
+      store.pendingBooking = null;
+      setState(() {
+        _applyData(
+          BillData(
+            customerName: booking.customerName,
+            customerPhone: booking.customerPhone,
+            items: [booking.toItemData()],
+          ),
+          includeRates: false,
+        );
+        linkedBookingId = booking.id;
+        amountPaidController.text = booking.advanceTotal > 0.005 ? fmtRate(booking.advanceTotal) : '';
+      });
+      _message(booking.advanceTotal > 0.005
+          ? 'Bill started from the booking. Advance ${money(booking.advanceTotal)} is counted as paid.'
+          : 'Bill started from the booking.');
+      return;
+    }
     final template = store.pendingTemplate;
     if (template == null) return;
     store.pendingTemplate = null;
-    if (!mounted) return;
     setState(() => _applyData(template, includeRates: false));
     _message("Customer and items copied into a new bill. Today's rates are used.");
   }
@@ -191,6 +232,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
       customerPhone.clear();
       amountPaidController.clear();
       qrMode = null;
+      linkedBookingId = '';
       items
         ..clear()
         ..add(ItemForm());
@@ -227,7 +269,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
 
   // ---------- generate invoice ----------
 
-  bool _validate(BillData d) {
+  bool _validate(BillData d, Booking? booking) {
     if (d.customerName.trim().isEmpty) {
       _message('Please enter customer name.');
       return false;
@@ -251,6 +293,13 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     if (d.hasPaymentEntry && d.amountPaidValue > d.grandTotal + 0.005) {
       _message('Amount paid cannot be more than the grand total (${money(d.grandTotal)}).');
       return false;
+    }
+    if (booking != null && booking.advanceTotal > 0.005 && d.hasPaymentEntry) {
+      final needed = booking.advanceTotal < d.grandTotal ? booking.advanceTotal : d.grandTotal;
+      if (d.amountPaidValue + 0.005 < needed) {
+        _message('Amount paid must include the booking advance (${money(needed)}). Leave it empty if paid in full.');
+        return false;
+      }
     }
     for (final item in d.items) {
       if (item.weightValue < 0 ||
@@ -283,10 +332,22 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
   Future<void> _generate() async {
     if (busy) return;
     final data = _toData();
-    if (!_validate(data)) return;
+    Booking? booking;
+    if (linkedBookingId.isNotEmpty) {
+      booking = store.bookingById(linkedBookingId);
+      if (booking == null || !booking.isOpen) {
+        _message('The linked booking is no longer open. Tap Unlink on the booking card to continue.');
+        return;
+      }
+    }
+    if (!_validate(data, booking)) return;
+    if (booking != null) {
+      data.advanceUsed = booking.advanceTotal < data.paidAmount ? booking.advanceTotal : data.paidAmount;
+    }
     setState(() => busy = true);
     try {
       final bill = await store.saveBill(data);
+      if (booking != null) await store.completeBooking(booking.id, bill);
       _resetForm();
       _saveDraftNow();
       if (!mounted) return;
@@ -496,6 +557,35 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _linkedBookingCard() {
+    final k = store.bookingById(linkedBookingId);
+    return Card(
+      color: const Color(0xFFE8F5E9),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        child: Row(children: [
+          const Icon(Icons.bookmark, color: Color(0xFF2E7D32)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              k == null
+                  ? 'Linked booking not found.'
+                  : 'Delivering booking for ${k.customerName}. Advance ${money(k.advanceTotal)} is counted as already paid.',
+              style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() {
+              linkedBookingId = '';
+              amountPaidController.clear();
+            }),
+            child: const Text('Unlink'),
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -527,11 +617,31 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
           const SizedBox(height: 20),
           sectionTitle('Customer Details', subtitle: 'Enter the customer information for this bill.'),
           const SizedBox(height: 12),
-          inputField('Customer Name', customerName),
+          TextField(
+            controller: customerName,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Customer Name',
+              suffixIcon: IconButton(
+                tooltip: 'Choose from saved customers',
+                icon: const Icon(Icons.person_search),
+                onPressed: () async {
+                  final c = await pickCustomer(context);
+                  if (c == null) return;
+                  setState(() {
+                    customerName.text = c.name;
+                    customerPhone.text = c.phone;
+                  });
+                },
+              ),
+            ),
+          ),
           const SizedBox(height: 10),
           inputField('Mobile Number', customerPhone, keyboardType: TextInputType.phone),
           const SizedBox(height: 24),
-          sectionTitle('Daily Rates & Making Charges', subtitle: 'Saved on this phone until you change them.'),
+          sectionTitle('Daily Rates & Making Charges',
+              subtitle: 'Same rates as the Dashboard (set yourself or fetched online). Saved until you change them.'),
           const SizedBox(height: 12),
           inputField('24K Gold Rate per 10 grams (Rs.)', goldRateController, keyboardType: numberKeyboard),
           const SizedBox(height: 10),
@@ -567,6 +677,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
                 child: _buildItemCard(entry.value, entry.key, data, numberKeyboard),
               )),
           const SizedBox(height: 8),
+          if (linkedBookingId.isNotEmpty) _linkedBookingCard(),
           Card(
             color: const Color(0xFFFFF8E9),
             child: Padding(

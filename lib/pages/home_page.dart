@@ -1,74 +1,14 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
+import '../backup_helper.dart';
 import '../constants.dart';
+import '../rates_card.dart';
 import '../store.dart';
 import '../widgets.dart';
+import 'booking_form_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
-
-  Future<void> _editRates(BuildContext context) async {
-    final gold = TextEditingController(text: store.goldRate.toStringAsFixed(2));
-    final silver = TextEditingController(text: store.silverRate.toStringAsFixed(2));
-    final formKey = GlobalKey<FormState>();
-    final save = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Set Gold & Silver Rates'),
-      content: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextFormField(controller: gold, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Gold per 10 grams (Rs.)'), validator: (v) => (double.tryParse(v ?? '') ?? 0) > 0 ? null : 'Enter a valid rate'),
-        const SizedBox(height: 12),
-        TextFormField(controller: silver, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Silver per gram (Rs.)'), validator: (v) => (double.tryParse(v ?? '') ?? 0) > 0 ? null : 'Enter a valid rate'),
-      ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () { if (formKey.currentState!.validate()) Navigator.pop(ctx, true); }, child: const Text('Save rates'))],
-    ));
-    if (save == true) await store.setRates(gold: double.parse(gold.text), silver: double.parse(silver.text), source: 'Manual');
-    gold.dispose(); silver.dispose();
-  }
-
-  Future<void> _fetchRates(BuildContext context) async {
-    showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const AlertDialog(content: Row(children: [CircularProgressIndicator(), SizedBox(width: 16), Expanded(child: Text('Fetching live market rates…'))])));
-    try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
-      Future<Map<String, dynamic>> getJson(String url) async {
-        final request = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 12));
-        request.headers.set(HttpHeaders.userAgentHeader, 'ShreeJankiJewellers/1.6');
-        final response = await request.close().timeout(const Duration(seconds: 12));
-        if (response.statusCode != 200) throw Exception('Rate service returned HTTP ${response.statusCode}');
-        return jsonDecode(await response.transform(utf8.decoder).join()) as Map<String, dynamic>;
-      }
-      final results = await Future.wait([getJson('https://api.gold-api.com/price/XAU'), getJson('https://api.gold-api.com/price/XAG'), getJson('https://open.er-api.com/v6/latest/USD')]);
-      client.close();
-      final goldUsd = (results[0]['price'] as num).toDouble();
-      final silverUsd = (results[1]['price'] as num).toDouble();
-      final inr = ((results[2]['rates'] as Map)['INR'] as num).toDouble();
-      final goldInr = goldUsd * inr * 10 / 31.1034768;
-      final silverInr = silverUsd * inr / 31.1034768;
-      if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
-      await store.setRates(gold: goldInr, silver: silverInr, source: 'Online (USD/INR converted)');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Online market rates updated. Verify local jeweller premiums before billing.')));
-    } catch (e) {
-      if (context.mounted) { Navigator.of(context, rootNavigator: true).pop(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not fetch rates. Your saved rates are unchanged. Details: $e'))); }
-    }
-  }
-
-  Widget _rateCards(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Expanded(child: _rateCard(context, icon: Icons.edit, title: 'Set Rates Manually', subtitle: 'Enter shop rates', button: 'SET RATES', onTap: () => _editRates(context))),
-      const SizedBox(width: 10),
-      Expanded(child: _rateCard(context, icon: Icons.public, title: 'Fetch Rates Online', subtitle: 'Market reference rates', button: 'FETCH NOW', onTap: () => _fetchRates(context))),
-    ]);
-  }
-
-  Widget _rateCard(BuildContext context, {required IconData icon, required String title, required String subtitle, required String button, required VoidCallback onTap}) => Card(
-    color: const Color(0xFFFFF5DF), elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17), side: const BorderSide(color: gold, width: 1.3)),
-    child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icon, color: maroon, size: 30), const SizedBox(height: 7), Text(title, style: const TextStyle(color: maroon, fontWeight: FontWeight.bold, fontSize: 14)), Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.brown)), const SizedBox(height: 8),
-      SizedBox(width: double.infinity, child: FilledButton(onPressed: onTap, style: FilledButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 4)), child: Text(button, style: const TextStyle(fontSize: 11)))),
-    ])),
-  );
 
   Widget _banner() {
     return Container(
@@ -113,6 +53,81 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  Future<void> _backupNow(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final err = await saveBackupFile();
+    messenger.showSnackBar(SnackBar(
+        content: Text(err == null ? 'Backup saved. Keep the file safe (Drive / WhatsApp to yourself).' : 'Could not save backup: $err')));
+  }
+
+  Widget _alertRow(IconData icon, String text, {VoidCallback? onTap, Widget? trailing}) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            Icon(icon, color: maroon, size: 22),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5))),
+            trailing ?? (onTap == null ? const SizedBox.shrink() : const Icon(Icons.chevron_right, color: Colors.black38)),
+          ]),
+        ),
+      );
+
+  /// Things that need attention today: backup, dues, deliveries, birthdays.
+  Widget _attention(BuildContext context) {
+    final rows = <Widget>[];
+    if (store.backupDue) {
+      rows.add(_alertRow(
+        Icons.cloud_upload_outlined,
+        store.lastBackupAt == null
+            ? 'You have not made a backup yet.'
+            : 'Backup is ${store.daysSinceBackup} days old, ${store.changesSinceBackup} change${store.changesSinceBackup == 1 ? '' : 's'} not saved.',
+        trailing: FilledButton(
+          style: FilledButton.styleFrom(
+              backgroundColor: maroon, foregroundColor: Colors.white, visualDensity: VisualDensity.compact),
+          onPressed: () => _backupNow(context),
+          child: const Text('Back up'),
+        ),
+      ));
+    }
+    if (store.dueBillCount > 0) {
+      rows.add(_alertRow(
+        Icons.account_balance_wallet_outlined,
+        '${store.dueBillCount} bill${store.dueBillCount == 1 ? '' : 's'} with due: ${money(store.totalDue)}',
+        onTap: () => navIndex.value = 7,
+      ));
+    }
+    final soon = store.bookingsDueSoon();
+    if (soon.isNotEmpty) {
+      rows.add(_alertRow(
+        Icons.event_available_outlined,
+        '${soon.length} booking${soon.length == 1 ? '' : 's'} due for delivery within 3 days or overdue',
+        onTap: () => navIndex.value = 6,
+      ));
+    }
+    final today = store.upcomingOccasions(days: 0);
+    if (today.isNotEmpty) {
+      final names = today.map((o) => '${o.customer.name} (${o.birthday ? 'birthday' : 'anniversary'})').join(', ');
+      rows.add(_alertRow(Icons.cake_outlined, 'Today: $names', onTap: () => navIndex.value = 7));
+    }
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 10),
+      child: Card(
+        color: const Color(0xFFFFF3E0),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 6),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Needs your attention', style: TextStyle(fontWeight: FontWeight.w800, color: maroon, fontSize: 15)),
+            const SizedBox(height: 2),
+            ...rows,
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _category(String image, String label) => Expanded(
         child: Card(
           child: Padding(
@@ -138,15 +153,9 @@ class HomePage extends StatelessWidget {
             child: ListView(padding: const EdgeInsets.all(16), children: [
               _banner(),
               const SizedBox(height: 12),
-              _rateCards(context),
+              const RatesCard(),
               const SizedBox(height: 6),
-              Card(color: maroonDark, child: Padding(padding: const EdgeInsets.all(12), child: ListenableBuilder(listenable: store, builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('CURRENT METAL RATES', style: TextStyle(color: goldLight, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                const SizedBox(height: 6),
-                Row(children: [Expanded(child: Text('Gold  ₹${store.goldRate.toStringAsFixed(0)} / 10g', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))), Expanded(child: Text('Silver  ₹${store.silverRate.toStringAsFixed(2)} / g', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)))]),
-                Text('Source: ${store.rateSource}  •  ${store.rateUpdatedAt == null ? 'Not updated yet' : fmtDateTime(store.rateUpdatedAt!)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-              ])))),
-              const SizedBox(height: 10),
+              _attention(context),
               Row(children: [
                 Expanded(child: StatCard(icon: Icons.receipt_long, label: 'Total Bills', value: '${store.totalBills}')),
                 const SizedBox(width: 10),
@@ -159,7 +168,11 @@ class HomePage extends StatelessWidget {
                 Expanded(child: StatCard(icon: Icons.confirmation_number_outlined, label: 'Next Invoice', value: store.nextInvoiceNo)),
               ]),
               const SizedBox(height: 4),
-              StatCard(icon: Icons.account_balance_wallet_outlined, label: 'Total Due (to collect)', value: money(store.totalDue)),
+              Row(children: [
+                Expanded(child: StatCard(icon: Icons.account_balance_wallet_outlined, label: 'Total Due', value: money(store.totalDue))),
+                const SizedBox(width: 10),
+                Expanded(child: StatCard(icon: Icons.bookmark_outline, label: 'Advance Held', value: money(store.advanceHeld))),
+              ]),
               const SizedBox(height: 10),
               SizedBox(
                 height: 52,
@@ -170,6 +183,30 @@ class HomePage extends StatelessWidget {
                   label: const Text('CREATE NEW INVOICE'),
                 ),
               ),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BookingFormPage())),
+                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                      label: const Text('NEW BOOKING'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () => navIndex.value = 5,
+                      icon: const Icon(Icons.people_outline, size: 18),
+                      label: const Text('CUSTOMERS'),
+                    ),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 8),
               SizedBox(
                 height: 48,

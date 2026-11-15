@@ -122,6 +122,10 @@ class BillData {
   String amountPaid;
   /// Chosen QR amount. null = automatic (balance due when part paid, else full total).
   QrMode? qrMode;
+  /// Booking this bill was made from ('' = none), and how much of that booking's
+  /// advance was adjusted in this bill (money that was already counted when received).
+  String bookingId;
+  double advanceUsed;
   List<ItemData> items;
 
   BillData({
@@ -136,6 +140,8 @@ class BillData {
     this.applyGst = false,
     this.amountPaid = '',
     this.qrMode,
+    this.bookingId = '',
+    this.advanceUsed = 0,
     List<ItemData>? items,
   }) : items = items ?? [ItemData()];
 
@@ -222,6 +228,8 @@ class BillData {
         'applyGst': applyGst,
         'amountPaid': amountPaid,
         'qrMode': qrMode?.index,
+        'bookingId': bookingId,
+        'advanceUsed': advanceUsed,
         'items': items.map((i) => i.toJson()).toList(),
       };
 
@@ -244,6 +252,8 @@ class BillData {
       qrMode: (j['qrMode'] is int && j['qrMode'] >= 0 && j['qrMode'] < QrMode.values.length)
           ? QrMode.values[j['qrMode'] as int]
           : null,
+      bookingId: (j['bookingId'] ?? '').toString(),
+      advanceUsed: (j['advanceUsed'] is num) ? (j['advanceUsed'] as num).toDouble() : 0,
       items: saved.isEmpty ? [ItemData()] : saved,
     );
   }
@@ -257,6 +267,8 @@ class SavedBill {
   final BillData data;
   /// Money collected after the bill was made (newest last).
   final List<Payment> payments;
+  /// When a WhatsApp due reminder was sent for this bill (newest last).
+  final List<DateTime> remindedAt;
 
   SavedBill({
     required this.invoiceNo,
@@ -264,7 +276,9 @@ class SavedBill {
     required this.createdAt,
     required this.data,
     List<Payment>? payments,
-  }) : payments = payments ?? [];
+    List<DateTime>? remindedAt,
+  })  : payments = payments ?? [],
+        remindedAt = remindedAt ?? [];
 
   double get grandTotal => data.grandTotal;
 
@@ -293,6 +307,7 @@ class SavedBill {
         'createdAt': createdAt.toIso8601String(),
         'data': data.toJson(),
         'payments': payments.map((p) => p.toJson()).toList(),
+        'remindedAt': remindedAt.map((d) => d.toIso8601String()).toList(),
       };
 
   factory SavedBill.fromJson(Map<String, dynamic> j) => SavedBill(
@@ -304,5 +319,10 @@ class SavedBill {
                 ?.map((e) => Payment.fromJson(Map<String, dynamic>.from(e as Map)))
                 .toList() ??
             <Payment>[],
+        remindedAt: (j['remindedAt'] as List?)
+                ?.map((e) => DateTime.tryParse(e.toString()))
+                .whereType<DateTime>()
+                .toList() ??
+            <DateTime>[],
       );
 }

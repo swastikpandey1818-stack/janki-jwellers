@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'backup_helper.dart';
 import 'constants.dart';
 import 'pages/billing_page.dart';
+import 'pages/bookings_page.dart';
+import 'pages/customers_page.dart';
 import 'pages/daybook_page.dart';
 import 'pages/history_page.dart';
 import 'pages/home_page.dart';
+import 'pages/reminders_page.dart';
 import 'pages/settings_page.dart';
 import 'store.dart';
 
@@ -59,11 +65,59 @@ class ShreeJankiJewellersApp extends StatelessWidget {
   }
 }
 
-/// App frame: AppBar + navigation drawer + the five main pages.
-class AppShell extends StatelessWidget {
+/// App frame: AppBar + navigation drawer + the main pages.
+/// Page numbers: 0 Dashboard, 1 New Invoice, 2 Bill History, 3 Day Book, 4 Settings,
+/// 5 Customers, 6 Advance & Booking, 7 Reminders.
+class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
-  static const titles = ['Dashboard', 'New Invoice', 'Bill History', 'Day Book', 'Settings'];
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  static const titles = [
+    'Dashboard',
+    'New Invoice',
+    'Bill History',
+    'Day Book',
+    'Settings',
+    'Customers',
+    'Advance & Booking',
+    'Reminders',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startup());
+  }
+
+  Future<void> _startup() async {
+    unawaited(store.refreshOnlineIfStale());
+    if (!store.shouldPromptBackupToday) return;
+    await store.markBackupPromptShown();
+    if (!mounted) return;
+    final days = store.daysSinceBackup;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Time for a backup'),
+        content: Text(days == null
+            ? 'You have not made a backup yet. Save one now so your bills, customers and bookings are safe if the phone is lost or the app is reinstalled.'
+            : 'Your last backup was $days days ago and ${store.changesSinceBackup} change${store.changesSinceBackup == 1 ? '' : 's'} since then are not saved in it.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Back up now')),
+        ],
+      ),
+    );
+    if (go != true) return;
+    final err = await saveBackupFile();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(err == null ? 'Backup saved. Keep the file safe (Drive / WhatsApp to yourself).' : 'Could not save backup: $err')));
+  }
 
   void _go(BuildContext context, int index) {
     Navigator.of(context).pop(); // close drawer
@@ -139,6 +193,43 @@ class AppShell extends StatelessWidget {
             ),
           ),
         ),
+        _drawerItem(context, current, 5, Icons.people_outline, 'Customers'),
+        _drawerItem(
+          context,
+          current,
+          6,
+          Icons.bookmark_outline,
+          'Advance & Booking',
+          trailing: ListenableBuilder(
+            listenable: store,
+            builder: (context, _) => store.openBookings.isEmpty
+                ? const SizedBox.shrink()
+                : Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(color: maroon, borderRadius: BorderRadius.circular(20)),
+                    child: Text('${store.openBookings.length}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+          ),
+        ),
+        _drawerItem(
+          context,
+          current,
+          7,
+          Icons.notifications_active_outlined,
+          'Reminders',
+          trailing: ListenableBuilder(
+            listenable: store,
+            builder: (context, _) => store.reminderCount == 0
+                ? const SizedBox.shrink()
+                : Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFFC62828), borderRadius: BorderRadius.circular(20)),
+                    child: Text('${store.reminderCount}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+          ),
+        ),
         _drawerItem(context, current, 3, Icons.calendar_month_outlined, 'Day Book'),
         _drawerItem(context, current, 4, Icons.settings_outlined, 'Settings'),
         const Divider(height: 24),
@@ -174,7 +265,16 @@ class AppShell extends StatelessWidget {
           drawer: _drawer(context, index),
           body: IndexedStack(
             index: index,
-            children: const [HomePage(), BillingPage(), HistoryPage(), DayBookPage(), SettingsPage()],
+            children: const [
+              HomePage(),
+              BillingPage(),
+              HistoryPage(),
+              DayBookPage(),
+              SettingsPage(),
+              CustomersPage(),
+              BookingsPage(),
+              RemindersPage(),
+            ],
           ),
         ),
       ),

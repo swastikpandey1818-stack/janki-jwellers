@@ -43,11 +43,11 @@ jobs:
         run: flutter build apk --release
 
       - name: Name the APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk Shree-Janki-Jewellers-v1.6.0.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk Shree-Janki-Jewellers-v1.7.0.apk
 
       - name: Save the APK so you can download it
         uses: actions/upload-artifact@v4
         with:
-          name: shree-janki-v1.6.0-apk
-          path: Shree-Janki-Jewellers-v1.6.0.apk
+          name: shree-janki-v1.7.0-apk
+          path: Shree-Janki-Jewellers-v1.7.0.apk
           if-no-files-found: error
