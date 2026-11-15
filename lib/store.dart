@@ -24,6 +24,7 @@ const _kSilverRate = 'rate_silver_v1';
 const _kRateSource = 'rate_source_v1';
 const _kRateAdjust = 'rate_adjust_v1';
 const _kRateTime = 'rate_time_v1';
+const _kRateName = 'rate_source_name_v1';
 
 /// Default WhatsApp text for a pending due. {name} {amount} {invoice} {date} {total} {shop} {phone} {upi}
 const defaultDueTemplate = 'Namaste {name} ji,\n\n'
@@ -137,6 +138,9 @@ class BillStore extends ChangeNotifier {
   double onlineAdjustPercent = 0;
   DateTime? ratesUpdatedAt;
 
+  /// Name of the website the online rates came from (e.g. IBJA).
+  String onlineSourceName = '';
+
   /// Goes up whenever the rates are changed from outside the billing page, so the billing page reloads them.
   int ratesVersion = 0;
 
@@ -217,6 +221,7 @@ class BillStore extends ChangeNotifier {
     rateSource = (src != null && src >= 0 && src < RateSource.values.length) ? RateSource.values[src] : RateSource.manual;
     onlineAdjustPercent = p.getDouble(_kRateAdjust) ?? 0;
     ratesUpdatedAt = DateTime.tryParse(p.getString(_kRateTime) ?? '');
+    onlineSourceName = p.getString(_kRateName) ?? '';
   }
 
   String invoiceNoFor(int n) => '$prefix-${n.toString().padLeft(4, '0')}';
@@ -657,6 +662,7 @@ class BillStore extends ChangeNotifier {
       await p.setInt(_kRateSource, rateSource.index);
       await p.setDouble(_kRateAdjust, onlineAdjustPercent);
       if (ratesUpdatedAt != null) await p.setString(_kRateTime, ratesUpdatedAt!.toIso8601String());
+      await p.setString(_kRateName, onlineSourceName);
     } catch (_) {
       // Best effort only.
     }
@@ -704,6 +710,7 @@ class BillStore extends ChangeNotifier {
     silverRate = live.silverPerGram;
     rateSource = RateSource.online;
     ratesUpdatedAt = live.fetchedAt;
+    onlineSourceName = live.source;
     ratesVersion++;
     notifyListeners();
     await _saveRates();

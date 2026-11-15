@@ -2,22 +2,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-/// Rates fetched from the internet, already converted to rupees.
+/// Indian gold and silver rates fetched from the internet.
 class LiveRates {
-  /// 24K gold, Rs. per 10 grams.
+  /// 24K (999) gold, Rs. per 10 grams.
   final double goldPer10g;
 
-  /// Silver, Rs. per gram.
+  /// 999 silver, Rs. per gram.
   final double silverPerGram;
 
-  /// Rupees per US dollar used for the conversion.
-  final double usdInr;
+  /// Where the rates came from, e.g. "IBJA" or "IBJA + OroPocket".
+  final String source;
   final DateTime fetchedAt;
 
   const LiveRates({
     required this.goldPer10g,
     required this.silverPerGram,
-    required this.usdInr,
+    required this.source,
     required this.fetchedAt,
   });
 }
@@ -29,169 +29,149 @@ class RateException implements Exception {
   String toString() => message;
 }
 
-/// Reads the international gold and silver price from several free public services (it tries
-/// them one by one until one works) and converts it to Rs. per 10 g / per gram.
+/// Reads INDIAN gold and silver rates only (never the international price).
 ///
-/// The result is the INTERNATIONAL price in rupees. Indian shop rates usually run higher
-/// (import duty, GST, local premium), so the app lets the seller add an adjustment %.
+/// Sources are tried one after another until one works:
+///  1. IBJA rates through a public API (ibja-api.vercel.app)
+///  2. IBJA rates straight from ibjarates.com
+///  3. OroPocket public Indian rate (buy rate, per gram)
+/// Gold and silver are looked up separately, so one metal failing does not stop the other.
 class RateService {
-  static const double _gramsPerTroyOunce = 31.1034768;
+  static const _ibjaApiGold = 'https://ibja-api.vercel.app/latest';
+  static const _ibjaApiSilver = 'https://ibja-api.vercel.app/silver/latest';
+  static const _ibjaSite = 'https://www.ibjarates.com/';
+  static const _oroUrl = 'https://api.oropocket.com/public/prices';
 
-  // Dollar -> rupee, tried in this order.
-  static const _fxUrls = [
-    'https://open.er-api.com/v6/latest/USD',
-    'https://api.frankfurter.dev/v1/latest?base=USD&symbols=INR',
-    'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',
-    'https://latest.currency-api.pages.dev/v1/currencies/usd.json',
-  ];
-
-  static Future<dynamic> _getAny(String url) async {
+  static Future<String> _getText(String url) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       final request = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       request.headers.set(HttpHeaders.userAgentHeader, 'Mozilla/5.0 (Android) ShreeJankiApp');
-      final response = await request.close().timeout(const Duration(seconds: 10));
+      final response = await request.close().timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) {
         await response.drain<void>();
         throw RateException('The rate server replied with error ${response.statusCode}.');
       }
-      final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
-      return jsonDecode(body);
+      return await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 12));
     } finally {
       client.close(force: true);
     }
   }
 
-  // ---- parsers (kept separate so they can be tested without internet) ----
+  static Future<dynamic> _getJson(String url) async => jsonDecode(await _getText(url));
 
-  static double? _positive(dynamic v) => (v is num && v > 0) ? v.toDouble() : null;
+  // ---- parsers (separate so they can be tested without internet) ----
 
-  /// gold-api.com: {"price": 4000.5, ...} in US dollars per troy ounce.
-  static double? parseGoldApi(dynamic json) => json is Map ? _positive(json['price']) : null;
-
-  /// Swissquote public feed: a list whose first item holds bid / ask prices in US dollars per ounce.
-  static double? parseSwissquote(dynamic json) {
-    if (json is! List || json.isEmpty || json.first is! Map) return null;
-    final profiles = (json.first as Map)['spreadProfilePrices'];
-    if (profiles is! List || profiles.isEmpty || profiles.first is! Map) return null;
-    final p = profiles.first as Map;
-    final bid = _positive(p['bid']);
-    final ask = _positive(p['ask']);
-    if (bid != null && ask != null) return (bid + ask) / 2;
-    return bid ?? ask;
-  }
-
-  /// Yahoo Finance chart (futures): US dollars per ounce.
-  static double? parseYahoo(dynamic json) {
-    if (json is! Map) return null;
-    final chart = json['chart'];
-    if (chart is! Map) return null;
-    final result = chart['result'];
-    if (result is! List || result.isEmpty || result.first is! Map) return null;
-    final meta = (result.first as Map)['meta'];
-    return meta is Map ? _positive(meta['regularMarketPrice']) : null;
-  }
-
-  /// fawazahmed0 currency API for "xau" / "xag": 1 ounce in rupees.
-  static double? parseCurrencyApi(dynamic json, String code) {
-    if (json is! Map) return null;
-    final row = json[code];
-    return row is Map ? _positive(row['inr']) : null;
-  }
-
-  /// Rupees per dollar from either the exchange-rate services or the currency API.
-  static double? parseFx(dynamic json) {
-    if (json is! Map) return null;
-    dynamic inr;
-    final rates = json['rates'];
-    if (rates is Map) inr = rates['INR'];
-    final usd = json['usd'];
-    if (inr == null && usd is Map) inr = usd['inr'];
-    return (inr is num && inr > 30 && inr < 300) ? inr.toDouble() : null;
-  }
-
-  // ---- fetching with fallbacks ----
-
-  static double? _usdInrCache;
-
-  static Future<double> _usdInr() async {
-    final cached = _usdInrCache;
-    if (cached != null) return cached;
-    for (final url in _fxUrls) {
-      try {
-        final v = parseFx(await _getAny(url));
-        if (v != null) return _usdInrCache = v;
-      } catch (_) {
-        // Try the next service.
-      }
+  static double? _numOf(dynamic v) {
+    if (v is num) return v > 0 ? v.toDouble() : null;
+    if (v is String) {
+      final d = double.tryParse(v.replaceAll(RegExp(r'[^0-9.]'), ''));
+      return (d != null && d > 0) ? d : null;
     }
-    throw const RateException('Could not read the dollar-to-rupee rate.');
+    return null;
   }
 
-  /// Rupees for one troy ounce of [metal] ('XAU' gold, 'XAG' silver). Tries every source in turn.
-  static Future<double> _inrPerOunce(String metal) async {
-    final isGold = metal == 'XAU';
-    final minUsd = isGold ? 100.0 : 1.0;
-    final maxUsd = isGold ? 100000.0 : 5000.0;
-    final code = metal.toLowerCase();
+  /// IBJA API gold: 999 gold, Rs. per 10 g. Uses the evening (PM) rate when there is one, else the morning one.
+  static double? parseIbjaGold(dynamic json) {
+    if (json is! Map) return null;
+    return _numOf(json['lblGold999_PM']) ?? _numOf(json['lblGold999_AM']);
+  }
 
-    // Each source gives US dollars per ounce, unless it is the currency API (rupees directly).
-    final usdSources = <(String, double? Function(dynamic))>[
-      ('https://api.gold-api.com/price/$metal', parseGoldApi),
-      ('https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/$metal/USD', parseSwissquote),
-      ('https://query1.finance.yahoo.com/v8/finance/chart/${isGold ? 'GC=F' : 'SI=F'}', parseYahoo),
-    ];
-    final inrUrls = [
-      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/$code.json',
-      'https://latest.currency-api.pages.dev/v1/currencies/$code.json',
-    ];
+  /// IBJA API silver: 999 silver, quoted per kg. Returns Rs. per gram.
+  static double? parseIbjaSilver(dynamic json) {
+    if (json is! Map) return null;
+    final perKg = _numOf(json['lblSilver999_PM']) ?? _numOf(json['lblSilver999_AM']);
+    return perKg == null ? null : perKg / 1000;
+  }
 
-    Object? lastError;
-    for (final (url, parse) in usdSources) {
+  static double? _htmlValue(String html, String id) {
+    final m = RegExp('id="$id"[^>]*>\\s*([0-9][0-9,.]*)\\s*<').firstMatch(html);
+    return m == null ? null : _numOf(m.group(1));
+  }
+
+  /// ibjarates.com page: gold 999 per 10 g.
+  static double? parseIbjaHtmlGold(String html) => _htmlValue(html, 'lblGold999_PM') ?? _htmlValue(html, 'lblGold999_AM');
+
+  /// ibjarates.com page: silver 999 per kg -> Rs. per gram.
+  static double? parseIbjaHtmlSilver(String html) {
+    final perKg = _htmlValue(html, 'lblSilver999_PM') ?? _htmlValue(html, 'lblSilver999_AM');
+    return perKg == null ? null : perKg / 1000;
+  }
+
+  /// OroPocket: Rs. per gram buy rate (without GST). [metal] is 'gold' or 'silver'.
+  static double? parseOro(dynamic json, String metal) {
+    if (json is! Map) return null;
+    final data = json['data'];
+    if (data is! Map) return null;
+    final row = data[metal];
+    return row is Map ? _numOf(row['buy']) : null;
+  }
+
+  // ---- fetching ----
+
+  /// Tries each source in order and returns the first sensible value with the source's name.
+  static Future<(double, String)?> _firstGood(
+    List<(String, Future<double?> Function())> attempts,
+    double min,
+    double max,
+    List<Object> errors,
+  ) async {
+    for (final (name, run) in attempts) {
       try {
-        final usd = parse(await _getAny(url));
-        if (usd != null && usd >= minUsd && usd <= maxUsd) return usd * await _usdInr();
+        final v = await run();
+        if (v != null && v >= min && v <= max) return (v, name);
       } catch (e) {
-        lastError = e;
+        errors.add(e);
       }
     }
-    for (final url in inrUrls) {
-      try {
-        final inr = parseCurrencyApi(await _getAny(url), code);
-        if (inr != null && inr >= minUsd * 30 && inr <= maxUsd * 300) return inr;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    if (lastError != null) throw lastError;
-    throw const RateException('None of the rate servers sent a usable price.');
+    return null;
   }
 
-  /// Fetches gold and silver and converts. [adjustPercent] is added on top
-  /// (use it to match your local market, e.g. 6 for import duty).
+  /// Fetches Indian gold and silver rates. [adjustPercent] is added on top
+  /// (e.g. to include GST or your own margin). 0 = the rate as published.
   static Future<LiveRates> fetch({double adjustPercent = 0}) async {
-    try {
-      _usdInrCache = null;
-      final goldInr = await _inrPerOunce('XAU');
-      final silverInr = await _inrPerOunce('XAG');
-      final factor = 1 + adjustPercent / 100;
-      return LiveRates(
-        goldPer10g: (goldInr / _gramsPerTroyOunce * 10 * factor).roundToDouble(),
-        silverPerGram: double.parse((silverInr / _gramsPerTroyOunce * factor).toStringAsFixed(2)),
-        usdInr: _usdInrCache ?? 0,
-        fetchedAt: DateTime.now(),
-      );
-    } on RateException {
-      rethrow;
-    } on SocketException {
-      throw const RateException('No internet connection. Check your data / Wi-Fi and try again.');
-    } on TimeoutException {
-      throw const RateException('The rate servers took too long. Try again in a moment.');
-    } on HandshakeException {
-      throw const RateException('Could not make a secure connection. Check the phone date and time.');
-    } catch (_) {
-      throw const RateException('Could not fetch the rates right now. You can set them yourself instead.');
+    final memo = <String, Future<dynamic>>{};
+    Future<dynamic> json(String url) => memo.putIfAbsent(url, () => _getJson(url));
+    Future<String> text(String url) async => (await memo.putIfAbsent(url, () => _getText(url))) as String;
+
+    final errors = <Object>[];
+    final gold = await _firstGood([
+      ('IBJA', () async => parseIbjaGold(await json(_ibjaApiGold))),
+      ('IBJA', () async => parseIbjaHtmlGold(await text(_ibjaSite))),
+      ('OroPocket', () async {
+        final g = parseOro(await json(_oroUrl), 'gold');
+        return g == null ? null : g * 10;
+      }),
+    ], 20000, 1000000, errors);
+    final silver = await _firstGood([
+      ('IBJA', () async => parseIbjaSilver(await json(_ibjaApiSilver))),
+      ('IBJA', () async => parseIbjaHtmlSilver(await text(_ibjaSite))),
+      ('OroPocket', () async => parseOro(await json(_oroUrl), 'silver')),
+    ], 10, 5000, errors);
+
+    if (gold == null && silver == null) {
+      if (errors.any((e) => e is SocketException)) {
+        throw const RateException('No internet connection. Check your data / Wi-Fi and try again.');
+      }
+      if (errors.any((e) => e is TimeoutException)) {
+        throw const RateException('The rate servers took too long. Try again in a moment.');
+      }
+      throw const RateException('Could not get Indian rates right now. You can set them yourself instead.');
     }
+    if (gold == null) {
+      throw const RateException('Could not get the gold rate right now. You can set it yourself instead.');
+    }
+    if (silver == null) {
+      throw const RateException('Could not get the silver rate right now. You can set it yourself instead.');
+    }
+
+    final factor = 1 + adjustPercent / 100;
+    final names = {gold.$2, silver.$2}.join(' + ');
+    return LiveRates(
+      goldPer10g: (gold.$1 * factor).roundToDouble(),
+      silverPerGram: double.parse((silver.$1 * factor).toStringAsFixed(2)),
+      source: names,
+      fetchedAt: DateTime.now(),
+    );
   }
 }

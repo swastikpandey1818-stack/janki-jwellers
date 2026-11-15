@@ -131,7 +131,7 @@ class _RatesCardState extends State<RatesCard> {
     final t = store.ratesUpdatedAt;
     final when = t == null ? '' : '  •  ${fmtDateTime(t)}';
     return store.rateSource == RateSource.online
-        ? 'Rates in use: fetched online$when'
+        ? 'Rates in use: Indian rate (${store.onlineSourceName.isEmpty ? 'online' : store.onlineSourceName})$when'
         : 'Rates in use: set by you$when';
   }
 
@@ -204,7 +204,7 @@ class _RatesCardState extends State<RatesCard> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                   decoration: const InputDecoration(
                     labelText: 'Adjustment on online rate (%)',
-                    helperText: 'Add % to match your local market, e.g. 6 for import duty. 0 = no change.',
+                    helperText: 'Optional: add % for GST or your margin. 0 = rate as published.',
                     helperMaxLines: 2,
                   ),
                 ),
@@ -226,8 +226,8 @@ class _RatesCardState extends State<RatesCard> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Online rate = international gold / silver price converted to rupees. '
-                  'It is a guide: check it against your local market, or use the adjustment above.',
+                  'Indian rates only: IBJA (24K 999 gold per 10 g, silver per gram), with OroPocket as backup. '
+                  'These are published base rates without GST. Check them against your local market.',
                   style: TextStyle(color: Colors.brown.shade400, fontSize: 11.5),
                 ),
                 if (error != null) ...[
