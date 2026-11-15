@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 
-const shopName = 'SHREE JANKI JEWELLERS';
+const appVersion = '1.6.0';
+
+const shopName = 'Shree Janki Jewellers';
 const shopAddress = 'Hasanpura, Thakur Badi Mandir, Siwan, Bihar';
 const shopPhone = '+91 84099 84584';
 const shopUpiId = '8409984584-1@okbizaxis';
 
-const maroon = Color(0xFF5B1425);
-const gold = Color(0xFFC69A3A);
+// Colours taken from the Shree Janki Jewellers logo (deep red + gold).
+const maroon = Color(0xFF6E0B0F);
+const maroonDark = Color(0xFF3E0508);
+const gold = Color(0xFFD4A017);
+const goldLight = Color(0xFFF6D27A);
 const cream = Color(0xFFF8F4ED);
 
-const logoAsset = 'assets/icon/shree_janki_app_icon.png';
-const headerBannerAsset = 'assets/images/header_banner.png';
-const drawerHeaderAsset = 'assets/images/drawer_header.png';
+const logoAsset = 'assets/images/logo_monogram.jpg'; // SJ monogram, small spots + PDF
+const logoFullAsset = 'assets/images/logo_full.jpg'; // full logo, dashboard header
 const goldBarAsset = 'assets/images/gold_bar.png';
 const silverBarAsset = 'assets/images/silver_bar.png';
 const gemAsset = 'assets/images/gem.png';

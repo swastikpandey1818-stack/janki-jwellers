@@ -16,7 +16,8 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.janki_jwellers"
+        // New id so this app installs NEXT TO older versions (which used com.example.janki_jwellers).
+        applicationId = "com.shreejanki.jewellers"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

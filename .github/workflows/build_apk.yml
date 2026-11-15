@@ -22,9 +22,19 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          # PINNED on purpose: this is the exact Flutter version the app was built
+          # and tested with on your PC (Gradle 9.1.0 in android/gradle/wrapper).
+          # Using "latest stable" broke the build when Flutter started requiring a
+          # newer Gradle. To upgrade later, change this AND the Gradle version
+          # in android/gradle/wrapper/gradle-wrapper.properties together.
           flutter-version: '3.44.2'
           channel: stable
           cache: true
+
+      - name: Show versions (helps debugging)
+        run: |
+          flutter --version
+          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Get packages
         run: flutter pub get
@@ -32,9 +42,12 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      - name: Name the APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk Shree-Janki-Jewellers-v1.6.0.apk
+
       - name: Save the APK so you can download it
         uses: actions/upload-artifact@v4
         with:
-          name: shree-janki-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: shree-janki-v1.6.0-apk
+          path: Shree-Janki-Jewellers-v1.6.0.apk
           if-no-files-found: error

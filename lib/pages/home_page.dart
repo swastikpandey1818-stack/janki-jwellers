@@ -8,43 +8,45 @@ class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   Widget _banner() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        height: 190,
-        child: Stack(fit: StackFit.expand, children: [
-          Image.asset(headerBannerAsset, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(color: maroon)),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xCC340A16), Color(0x00340A16)],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 18,
-            top: 0,
-            bottom: 0,
-            right: 130,
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.asset(logoAsset, width: 52, height: 52, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: Colors.white, size: 40)),
-              ),
-              const SizedBox(height: 10),
-              const Text(shopName,
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, height: 1.15)),
-              const SizedBox(height: 4),
-              const Text(shopAddress, maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white70, fontSize: 11)),
-            ]),
-          ),
-        ]),
+    return Container(
+      height: 178,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [maroonDark, maroon],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: gold, width: 2),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3))],
       ),
+      child: Row(children: [
+        Container(
+          width: 128,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: gold, width: 1.5),
+          ),
+          child: Image.asset(logoFullAsset, fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: maroon, size: 48)),
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(shopName,
+                style: TextStyle(
+                    color: goldLight, fontWeight: FontWeight.w800, fontSize: 20, height: 1.15, fontFamily: 'serif')),
+            SizedBox(height: 8),
+            Text(shopAddress, maxLines: 3, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.3)),
+            SizedBox(height: 6),
+            Text(shopPhone, style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      ]),
     );
   }
 

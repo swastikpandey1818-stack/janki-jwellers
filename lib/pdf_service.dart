@@ -67,7 +67,7 @@ class PdfService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(shopName,
-                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.brown900)),
+                  style: pw.TextStyle(font: pw.Font.timesBold(), fontSize: 22, color: PdfColor.fromInt(0xFF6E0B0F))),
               pw.SizedBox(height: 4),
               pw.Text(shopAddress, style: const pw.TextStyle(fontSize: 9)),
               pw.Text('Phone: $shopPhone', style: const pw.TextStyle(fontSize: 9)),

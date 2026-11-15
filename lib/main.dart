@@ -27,7 +27,11 @@ class ShreeJankiJewellersApp extends StatelessWidget {
         colorScheme: scheme,
         useMaterial3: true,
         scaffoldBackgroundColor: cream,
-        appBarTheme: const AppBarTheme(backgroundColor: maroon, foregroundColor: Colors.white),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: maroon,
+          foregroundColor: Colors.white,
+          shape: Border(bottom: BorderSide(color: gold, width: 2.5)),
+        ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -81,39 +85,37 @@ class AppShell extends StatelessWidget {
   Widget _drawer(BuildContext context, int current) {
     return Drawer(
       child: ListView(padding: EdgeInsets.zero, children: [
-        SizedBox(
-          height: 200,
-          child: Stack(fit: StackFit.expand, children: [
-            Image.asset(drawerHeaderAsset, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(color: maroon)),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0x00000000), Color(0xAA2A0510)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
+        Container(
+          padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 16),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [maroonDark, maroon],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 14,
-              child: Row(children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(logoAsset, width: 54, height: 54, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: Colors.white, size: 40)),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                    Text(shopName,
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, height: 1.15)),
-                    SizedBox(height: 3),
-                    Text(shopPhone, style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  ]),
-                ),
+            border: Border(bottom: BorderSide(color: gold, width: 3)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 68,
+              height: 68,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: gold, width: 1.5),
+              ),
+              child: Image.asset(logoAsset, fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: maroon, size: 36)),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(shopName,
+                    style: TextStyle(
+                        color: goldLight, fontWeight: FontWeight.w800, fontSize: 18, height: 1.15, fontFamily: 'serif')),
+                SizedBox(height: 4),
+                Text(shopPhone, style: TextStyle(color: Colors.white70, fontSize: 12)),
               ]),
             ),
           ]),
@@ -147,6 +149,10 @@ class AppShell extends StatelessWidget {
             child: Text('Next invoice: ${store.nextInvoiceNo}',
                 style: TextStyle(color: Colors.brown.shade400, fontSize: 12.5)),
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+          child: Text('Version $appVersion', style: TextStyle(color: Colors.brown.shade300, fontSize: 12)),
         ),
       ]),
     );
