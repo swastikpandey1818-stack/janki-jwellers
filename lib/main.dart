@@ -36,8 +36,45 @@ class ShreeJankiJewellersApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           backgroundColor: maroon,
           foregroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
           shape: Border(bottom: BorderSide(color: gold, width: 2.5)),
         ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: maroon,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.5),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: maroon,
+            side: const BorderSide(color: maroon, width: 1.2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.3),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: maroon, textStyle: const TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: const BorderSide(color: gold, width: 1),
+          ),
+          titleTextStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: maroon),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: maroonDark,
+          contentTextStyle: const TextStyle(color: Colors.white),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        dividerTheme: const DividerThemeData(color: Color(0xFFE9DFCF)),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -125,14 +162,18 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _drawerItem(BuildContext context, int current, int index, IconData icon, String label, {Widget? trailing}) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      trailing: trailing,
-      selected: current == index,
-      selectedColor: maroon,
-      selectedTileColor: const Color(0xFFFFF1D6),
-      onTap: () => _go(context, index),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1.5),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        leading: Icon(icon),
+        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        trailing: trailing,
+        selected: current == index,
+        selectedColor: maroon,
+        selectedTileColor: const Color(0xFFFFF1D6),
+        onTap: () => _go(context, index),
+      ),
     );
   }
 
@@ -142,10 +183,11 @@ class _AppShellState extends State<AppShell> {
         Container(
           padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 16),
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [maroonDark, maroon],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            color: maroonDark,
+            image: DecorationImage(
+              image: AssetImage(drawerHeaderAsset),
+              fit: BoxFit.cover,
+              colorFilter: ColorFilter.mode(Color(0x66340A16), BlendMode.darken),
             ),
             border: Border(bottom: BorderSide(color: gold, width: 3)),
           ),
@@ -260,7 +302,31 @@ class _AppShellState extends State<AppShell> {
         },
         child: Scaffold(
           appBar: AppBar(
-            title: Text(titles[index], style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(titles[index], style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+            flexibleSpace: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [maroonDark, maroon], begin: Alignment.centerLeft, end: Alignment.centerRight),
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: gold, width: 1.5),
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(logoAsset, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: maroon, size: 18)),
+                  ),
+                ),
+              ),
+            ],
           ),
           drawer: _drawer(context, index),
           body: IndexedStack(

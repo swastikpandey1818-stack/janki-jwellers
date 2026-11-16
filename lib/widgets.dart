@@ -19,9 +19,18 @@ String typeImage(ItemType type) {
 Widget sectionTitle(String title, {String? subtitle}) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: maroon)),
+        Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: maroon, letterSpacing: 0.2)),
+        const SizedBox(height: 4),
+        Container(
+          width: 30,
+          height: 3,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [gold, goldLight]),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
         if (subtitle != null) ...[
-          const SizedBox(height: 3),
+          const SizedBox(height: 5),
           Text(subtitle, style: TextStyle(color: Colors.brown.shade500, fontSize: 12)),
         ],
       ],
@@ -75,10 +84,14 @@ class StatCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Row(children: [
           Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(color: const Color(0xFFFFF1D6), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: maroon),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [maroon, maroonDark], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: gold, width: 1.2),
+            ),
+            child: Icon(icon, color: goldLight, size: 22),
           ),
           const SizedBox(width: 10),
           Expanded(

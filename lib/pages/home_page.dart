@@ -12,46 +12,118 @@ class HomePage extends StatelessWidget {
 
   Widget _banner() {
     return Container(
-      height: 178,
-      padding: const EdgeInsets.all(14),
+      height: 196,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [maroonDark, maroon],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: gold, width: 2),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3))],
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: gold, width: 1.6),
+        boxShadow: const [BoxShadow(color: Color(0x40340A16), blurRadius: 14, offset: Offset(0, 6))],
       ),
-      child: Row(children: [
-        Container(
-          width: 128,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: gold, width: 1.5),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20.5),
+        child: Stack(fit: StackFit.expand, children: [
+          // Diamond + gold rings texture
+          Image.asset(headerBannerAsset,
+              fit: BoxFit.cover,
+              alignment: Alignment.centerRight,
+              errorBuilder: (_, __, ___) => Container(color: maroon)),
+          // Dark fade on the left so the text stays readable
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xE6340A16), Color(0x99340A16), Color(0x00340A16)],
+                stops: [0.0, 0.55, 1.0],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+            ),
           ),
-          child: Image.asset(logoFullAsset, fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: maroon, size: 48)),
-        ),
-        const SizedBox(width: 14),
-        const Expanded(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(shopName,
-                style: TextStyle(
-                    color: goldLight, fontWeight: FontWeight.w800, fontSize: 20, height: 1.15, fontFamily: 'serif')),
-            SizedBox(height: 8),
-            Text(shopAddress, maxLines: 3, overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.3)),
-            SizedBox(height: 6),
-            Text(shopPhone, style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-      ]),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 96, 14),
+            child: Row(children: [
+              Container(
+                width: 66,
+                height: 66,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: gold, width: 2),
+                  boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 6, offset: Offset(0, 2))],
+                ),
+                child: ClipOval(
+                  child: Image.asset(logoAsset, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.diamond, color: maroon, size: 32)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text(shopName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: goldLight, fontWeight: FontWeight.w800, fontSize: 19, height: 1.15, fontFamily: 'serif')),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 36,
+                    height: 2.5,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [gold, goldLight]),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(shopAddress,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.3)),
+                  const SizedBox(height: 5),
+                  const Text(shopPhone,
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
+
+  Widget _action(IconData icon, String label, VoidCallback onTap) => Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Ink(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFECE4D8)),
+                boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 2))],
+              ),
+              child: Column(children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(colors: [maroon, maroonDark], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    border: Border.all(color: gold, width: 1.5),
+                  ),
+                  child: Icon(icon, color: goldLight, size: 22),
+                ),
+                const SizedBox(height: 8),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    style: const TextStyle(fontWeight: FontWeight.w700, color: maroon, fontSize: 11.5, height: 1.15)),
+              ]),
+            ),
+          ),
+        ),
+      );
 
   Future<void> _backupNow(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -174,48 +246,14 @@ class HomePage extends StatelessWidget {
                 Expanded(child: StatCard(icon: Icons.bookmark_outline, label: 'Advance Held', value: money(store.advanceHeld))),
               ]),
               const SizedBox(height: 10),
-              SizedBox(
-                height: 52,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white),
-                  onPressed: () => navIndex.value = 1,
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('CREATE NEW INVOICE'),
-                ),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Row(children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BookingFormPage())),
-                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                      label: const Text('NEW BOOKING'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: () => navIndex.value = 5,
-                      icon: const Icon(Icons.people_outline, size: 18),
-                      label: const Text('CUSTOMERS'),
-                    ),
-                  ),
-                ),
+                _action(Icons.add_circle_outline, 'New\nInvoice', () => navIndex.value = 1),
+                _action(Icons.bookmark_add_outlined, 'New\nBooking',
+                    () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BookingFormPage()))),
+                _action(Icons.people_outline, 'Customers', () => navIndex.value = 5),
+                _action(Icons.history, 'All\nBills', () => navIndex.value = 2),
               ]),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: () => navIndex.value = 2,
-                  icon: const Icon(Icons.history),
-                  label: const Text('VIEW ALL BILLS'),
-                ),
-              ),
               const SizedBox(height: 18),
               sectionTitle('We deal in'),
               const SizedBox(height: 6),
