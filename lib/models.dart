@@ -107,6 +107,46 @@ class ItemData {
   }
 }
 
+/// Old gold / silver taken back from the customer. Its value is deducted from the bill.
+class ExchangeItem {
+  final bool isSilver;
+  final double weight; // grams, before melting loss
+  final String purity; // label, e.g. '22K' or '92.5%'
+  final double ratePerGram;
+  final double deductionPercent; // melting loss / wastage
+
+  ExchangeItem({
+    required this.isSilver,
+    required this.weight,
+    required this.purity,
+    required this.ratePerGram,
+    this.deductionPercent = 0,
+  });
+
+  double get netWeight => weight * (1 - deductionPercent / 100);
+  double get value => netWeight * ratePerGram;
+  String get label => '${isSilver ? 'Old Silver' : 'Old Gold'} $purity';
+
+  Map<String, dynamic> toJson() => {
+        'isSilver': isSilver,
+        'weight': weight,
+        'purity': purity,
+        'ratePerGram': ratePerGram,
+        'deductionPercent': deductionPercent,
+      };
+
+  factory ExchangeItem.fromJson(Map<String, dynamic> j) {
+    double n(dynamic v) => v is num ? v.toDouble() : parseNum((v ?? '').toString());
+    return ExchangeItem(
+      isSilver: j['isSilver'] == true,
+      weight: n(j['weight']),
+      purity: (j['purity'] ?? '').toString(),
+      ratePerGram: n(j['ratePerGram']),
+      deductionPercent: n(j['deductionPercent']),
+    );
+  }
+}
+
 /// Everything entered for one bill, plus all the price maths.
 class BillData {
   String customerName;
@@ -127,6 +167,8 @@ class BillData {
   String bookingId;
   double advanceUsed;
   List<ItemData> items;
+  /// Old gold / silver given back by the customer (deducted from the total).
+  List<ExchangeItem> exchanges;
 
   BillData({
     this.customerName = '',
@@ -143,7 +185,9 @@ class BillData {
     this.bookingId = '',
     this.advanceUsed = 0,
     List<ItemData>? items,
-  }) : items = items ?? [ItemData()];
+    List<ExchangeItem>? exchanges,
+  })  : items = items ?? [ItemData()],
+        exchanges = exchanges ?? [];
 
   double get goldRatePer10g => parseNum(goldRate);
   double get silverRatePerGram => parseNum(silverRate);
@@ -183,7 +227,15 @@ class BillData {
   double get makingTotal => items.fold(0.0, (s, i) => s + makingFor(i));
   double get subtotal => jewelleryTotal + makingTotal;
   double get gstAmount => applyGst ? subtotal * gstPercentage / 100 : 0;
-  double get grandTotal => subtotal + gstAmount;
+  /// Bill total before any old-metal exchange is deducted.
+  double get grossTotal => subtotal + gstAmount;
+  double get exchangeTotal => exchanges.fold(0.0, (s, e) => s + e.value);
+
+  /// Net amount the customer has to pay (gross total minus old gold / silver value).
+  double get grandTotal {
+    final t = grossTotal - exchangeTotal;
+    return t < 0 ? 0 : t;
+  }
 
   // ---- part payment / due ----
   /// True once an amount paid has been typed (even 0 means nothing paid yet).
@@ -231,6 +283,7 @@ class BillData {
         'bookingId': bookingId,
         'advanceUsed': advanceUsed,
         'items': items.map((i) => i.toJson()).toList(),
+        'exchanges': exchanges.map((e) => e.toJson()).toList(),
       };
 
   factory BillData.fromJson(Map<String, dynamic> j) {
@@ -255,6 +308,10 @@ class BillData {
       bookingId: (j['bookingId'] ?? '').toString(),
       advanceUsed: (j['advanceUsed'] is num) ? (j['advanceUsed'] as num).toDouble() : 0,
       items: saved.isEmpty ? [ItemData()] : saved,
+      exchanges: (j['exchanges'] as List?)
+              ?.map((e) => ExchangeItem.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          <ExchangeItem>[],
     );
   }
 }

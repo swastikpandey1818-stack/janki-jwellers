@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const appVersion = '1.8.0';
+const appVersion = '1.9.0';
 
 const shopName = 'Shree Janki Jewellers';
 const shopAddress = 'Hasanpura, Thakur Badi Mandir, Siwan, Bihar';

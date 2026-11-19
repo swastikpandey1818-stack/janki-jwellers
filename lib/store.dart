@@ -7,6 +7,7 @@ import 'constants.dart';
 import 'crm_models.dart';
 import 'models.dart';
 import 'rate_service.dart';
+import 'stock.dart';
 
 const _kBills = 'saved_bills_v1';
 const _kPrefix = 'invoice_prefix_v1';
@@ -40,7 +41,8 @@ final ValueNotifier<int> navIndex = ValueNotifier<int>(0);
 
 /// Backup file format version. Bump only when the file layout changes.
 /// 1 = bills only (app 1.1 - 1.6).  2 = bills + customers + bookings + rates + settings (app 1.7).
-const int kBackupVersion = 2;
+/// 3 = also the stock register (app 1.9).
+const int kBackupVersion = 3;
 
 enum PeriodKind { daily, weekly, monthly }
 
@@ -815,6 +817,7 @@ class BillStore extends ChangeNotifier {
       'bills': bills.map((b) => b.toJson()).toList(),
       'customers': customers.map((c) => c.toJson()).toList(),
       'bookings': bookings.map((b) => b.toJson()).toList(),
+      'stock': stockStore.toJsonList(),
       'settings': {
         'goldRate': goldRate,
         'silverRate': silverRate,
@@ -863,6 +866,7 @@ class BillStore extends ChangeNotifier {
     if (version is int && version > kBackupVersion) {
       return const ImportResult(error: 'This backup is from a newer version of the app. Update the app first.');
     }
+    await stockStore.restore(map['stock'], replace: replace);
 
     final incoming = <SavedBill>[];
     var unreadable = 0;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'backup_helper.dart';
 import 'constants.dart';
+import 'lock.dart';
 import 'pages/billing_page.dart';
 import 'pages/bookings_page.dart';
 import 'pages/customers_page.dart';
@@ -11,12 +12,17 @@ import 'pages/daybook_page.dart';
 import 'pages/history_page.dart';
 import 'pages/home_page.dart';
 import 'pages/reminders_page.dart';
+import 'pages/reports_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/stock_page.dart';
+import 'stock.dart';
 import 'store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await store.load();
+  await stockStore.load();
+  await AppLock.i.load();
   runApp(const ShreeJankiJewellersApp());
 }
 
@@ -97,6 +103,7 @@ class ShreeJankiJewellersApp extends StatelessWidget {
           ),
         ),
       ),
+      builder: (context, child) => LockGate(child: child ?? const SizedBox.shrink()),
       home: const AppShell(),
     );
   }
@@ -104,7 +111,7 @@ class ShreeJankiJewellersApp extends StatelessWidget {
 
 /// App frame: AppBar + navigation drawer + the main pages.
 /// Page numbers: 0 Dashboard, 1 New Invoice, 2 Bill History, 3 Day Book, 4 Settings,
-/// 5 Customers, 6 Advance & Booking, 7 Reminders.
+/// 5 Customers, 6 Advance & Booking, 7 Reminders, 8 Reports, 9 Stock Register.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -122,6 +129,8 @@ class _AppShellState extends State<AppShell> {
     'Customers',
     'Advance & Booking',
     'Reminders',
+    'Reports',
+    'Stock Register',
   ];
 
   @override
@@ -273,6 +282,8 @@ class _AppShellState extends State<AppShell> {
           ),
         ),
         _drawerItem(context, current, 3, Icons.calendar_month_outlined, 'Day Book'),
+        _drawerItem(context, current, 8, Icons.insights_outlined, 'Reports'),
+        _drawerItem(context, current, 9, Icons.inventory_2_outlined, 'Stock Register'),
         _drawerItem(context, current, 4, Icons.settings_outlined, 'Settings'),
         const Divider(height: 24),
         ListenableBuilder(
@@ -340,6 +351,8 @@ class _AppShellState extends State<AppShell> {
               CustomersPage(),
               BookingsPage(),
               RemindersPage(),
+              ReportsPage(),
+              StockPage(),
             ],
           ),
         ),

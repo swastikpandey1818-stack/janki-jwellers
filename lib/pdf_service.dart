@@ -154,6 +154,12 @@ class PdfService {
                 pw.Divider(),
                 _summaryRow('Subtotal', d.subtotal),
                 _summaryRow('GST (${d.applyGst ? d.gstPercentage : 0}%)', d.gstAmount),
+                if (d.exchanges.isNotEmpty) ...[
+                  pw.Divider(),
+                  _summaryRow('Gross Total', d.grossTotal),
+                  ...d.exchanges.map((e) => _summaryRow(
+                      'Less: ${e.label} ${e.netWeight.toStringAsFixed(2)}g', -e.value)),
+                ],
                 pw.Divider(),
                 pw.Container(
                   padding: const pw.EdgeInsets.all(9),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../constants.dart';
 import '../crm_models.dart';
+import '../exchange_dialog.dart';
 import '../models.dart';
 import '../store.dart';
 import '../widgets.dart';
@@ -80,6 +81,8 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
   bool applyGst = false;
   QrMode? qrMode;
   bool busy = false;
+  /// Old gold / silver the customer gives back (deducted from the total).
+  List<ExchangeItem> exchanges = [];
   Timer? _saveTimer;
 
   /// Booking this bill is being made from ('' = none). Its advance counts as already paid.
@@ -158,6 +161,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
         qrMode: qrMode,
         bookingId: linkedBookingId,
         items: items.map((i) => i.toData()).toList(),
+        exchanges: List<ExchangeItem>.of(exchanges),
       );
 
   void _disposeLater(List<ItemForm> old) {
@@ -176,6 +180,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     amountPaidController.text = includeRates ? d.amountPaid : '';
     qrMode = includeRates ? d.qrMode : null;
     linkedBookingId = includeRates ? d.bookingId : '';
+    exchanges = includeRates ? List<ExchangeItem>.of(d.exchanges) : <ExchangeItem>[];
     if (includeRates) {
       goldRateController.text = d.goldRate;
       silverRateController.text = d.silverRate;
@@ -233,6 +238,7 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
       amountPaidController.clear();
       qrMode = null;
       linkedBookingId = '';
+      exchanges = [];
       items
         ..clear()
         ..add(ItemForm());
@@ -256,6 +262,56 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
   }
 
   void addItem() => setState(() => items.add(ItemForm()));
+
+  Future<void> _addExchange() async {
+    final item = await showExchangeDialog(
+      context,
+      goldRate10g: parseNum(goldRateController.text),
+      silverRatePerGram: parseNum(silverRateController.text),
+    );
+    if (item != null && mounted) setState(() => exchanges.add(item));
+  }
+
+  Widget _exchangeCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.swap_horiz, color: maroon),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Old Gold / Silver Exchange',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: maroon)),
+            ),
+            OutlinedButton.icon(onPressed: _addExchange, icon: const Icon(Icons.add, size: 18), label: const Text('Add')),
+          ]),
+          if (exchanges.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('Customer giving old jewellery? Add it here and its value is deducted from the bill.',
+                  style: TextStyle(color: Colors.brown.shade400, fontSize: 12)),
+            ),
+          for (final e in exchanges)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(e.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                  '${e.weight.toStringAsFixed(3)} g, loss ${fmtRate(e.deductionPercent)}%  ->  net ${e.netWeight.toStringAsFixed(3)} g @ ${money(e.ratePerGram)}/g'),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('- ${money(e.value)}', style: const TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.w800)),
+                IconButton(
+                  tooltip: 'Remove',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => setState(() => exchanges.remove(e)),
+                ),
+              ]),
+            ),
+        ]),
+      ),
+    );
+  }
 
   void removeItem(int index) {
     if (items.length == 1) {
@@ -284,6 +340,10 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
     }
     if (d.applyGst && d.gstPercentage > 100) {
       _message('GST percentage cannot exceed 100%.');
+      return false;
+    }
+    if (d.exchangeTotal > d.grossTotal + 0.005) {
+      _message('Old gold / silver value (${money(d.exchangeTotal)}) cannot be more than the bill total (${money(d.grossTotal)}).');
       return false;
     }
     if (d.amountPaidValue < 0) {
@@ -677,6 +737,8 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
                 child: _buildItemCard(entry.value, entry.key, data, numberKeyboard),
               )),
           const SizedBox(height: 8),
+          _exchangeCard(),
+          const SizedBox(height: 10),
           if (linkedBookingId.isNotEmpty) _linkedBookingCard(),
           Card(
             color: const Color(0xFFFFF8E9),
@@ -699,6 +761,10 @@ class _BillingPageState extends State<BillingPage> with WidgetsBindingObserver {
                   inputField('GST Percentage', gstController, keyboardType: numberKeyboard),
                   const SizedBox(height: 8),
                   summaryTile('GST Amount', data.gstAmount),
+                ],
+                if (data.exchanges.isNotEmpty) ...[
+                  summaryTile('Gross Total', data.grossTotal),
+                  summaryTile('Less: Old Gold / Silver', -data.exchangeTotal, color: const Color(0xFF2E7D32)),
                 ],
                 const Divider(),
                 summaryTile('GRAND TOTAL', data.grandTotal, bold: true),

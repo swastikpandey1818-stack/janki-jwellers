@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../backup_helper.dart';
 import '../constants.dart';
+import '../lock.dart';
 import '../store.dart';
 import '../widgets.dart';
 
@@ -210,6 +211,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: const Text('SAVE SETTINGS'),
               ),
             ),
+            const SizedBox(height: 26),
+            sectionTitle('Security', subtitle: 'Keep your bills and customers private.'),
+            const SizedBox(height: 8),
+            const AppLockCard(),
             const SizedBox(height: 26),
             sectionTitle('Saved Data'),
             const SizedBox(height: 8),

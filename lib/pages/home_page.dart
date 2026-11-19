@@ -254,6 +254,13 @@ class HomePage extends StatelessWidget {
                 _action(Icons.people_outline, 'Customers', () => navIndex.value = 5),
                 _action(Icons.history, 'All\nBills', () => navIndex.value = 2),
               ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                _action(Icons.insights_outlined, 'Reports', () => navIndex.value = 8),
+                _action(Icons.inventory_2_outlined, 'Stock', () => navIndex.value = 9),
+                _action(Icons.calendar_month_outlined, 'Day\nBook', () => navIndex.value = 3),
+                _action(Icons.notifications_none, 'Reminders', () => navIndex.value = 7),
+              ]),
               const SizedBox(height: 18),
               sectionTitle('We deal in'),
               const SizedBox(height: 6),

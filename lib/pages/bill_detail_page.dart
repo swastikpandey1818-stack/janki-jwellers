@@ -288,6 +288,11 @@ class _BillDetailPageState extends State<BillDetailPage> {
                   const Divider(),
                   _row('Subtotal', d.subtotal),
                   _row('GST (${d.applyGst ? d.gstPercentage : 0}%)', d.gstAmount),
+                  if (d.exchanges.isNotEmpty) ...[
+                    const Divider(),
+                    _row('Gross Total', d.grossTotal),
+                    ...d.exchanges.map((e) => _row('Less: ${e.label} ${e.netWeight.toStringAsFixed(2)} g', -e.value, color: _green)),
+                  ],
                   const Divider(),
                   _row('GRAND TOTAL', d.grandTotal, bold: true),
                   if (d.hasPaymentEntry) ...[
